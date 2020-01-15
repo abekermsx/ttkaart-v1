@@ -1,0 +1,647 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Module>
+<ModulePrefs title="Tafeltennisresultaten" summary="Tafeltennisresultaten" description="Geeft de persoonlijke resultaten uit de Nederlands tafeltenniscompetitie weer" author="Arjan Bakker" author_email="info@ttkaart.nl" thumbnail="http://www.ttkaart.nl/opensocial/thumbnail.png" screenshot="http://www.ttkaart.nl/opensocial/screenshot.png" height="380">
+   <Require feature="opensocial-0.7"/>
+   <Require feature="dynamic-height"/>
+   <Require feature="views"/>
+ </ModulePrefs>
+ <Content type="html">
+ <![CDATA[
+<style type="text/css">
+	img {
+		border:none;
+	}
+	
+	table {
+		font-size:12px;
+		width:100%;
+	}
+	
+	div {
+		font-size:12px;
+	}
+	
+	table.details tr.header {
+		background-color:#ddd;
+	}
+	
+	table.details tr.header td {
+		border-bottom:1px solid black;
+		font-weight:bold;
+	}
+	
+	table.details td {
+		padding:0px 8px 0px 4px;
+	}
+	
+	table.details tr.even {
+		background-color:#eee;
+	}
+		
+	a, a:visited {
+		color:#4C7CC1;
+		text-decoration:none;
+		font-weight:bold;
+	}
+	
+	a:hover {
+		text-decoration:underline;
+	}
+	
+	#player {
+		margin-left:8px;
+		margin-right:8px;
+		background-color:#eee;
+		font-size:12px;
+		height:56px;
+	}
+	
+	.friend {
+		background-color:#eee;
+		font-size:12px;
+		height:56px;
+		cursor:pointer;
+	}
+	
+	.friend img {
+		float:left;	
+		margin-top:4px;
+		margin-left:4px;
+		margin-right:4px;
+	}
+	
+	#avatar {
+		width:44px;
+		height:48px;
+		float:left;
+		margin-top:4px;
+		margin-left:4px;
+		margin-right:4px;
+	}
+	
+	#name {
+		padding-top:12px;
+		font-size:14px;
+		font-weight:bold;
+	}
+	
+	#best {
+		font-weight:bold;
+	}
+		
+	#settings, #result, #footersmall, #footerbig {
+		font-size:12px;
+	}
+	
+	#rankings, #settings, #about {
+		display:none;
+		visibility:hidden;	
+	}
+	
+	#about {
+		background-image:url(http://www.ttkaart.nl/images/ttlogo1.png);
+		background-position:100% 0%;
+		background-repeat:no-repeat;
+		height:180px;
+		padding:4px;
+		background-color:#eee;
+	}
+	
+	#settings {
+		background-color:#eee;
+		font-weight:bold;
+		padding:4px;
+	}
+	
+	#error { 
+		border:1px solid #C12C5C;
+		background-color:#F16C9C;
+		font-size:12px;
+		text-align:center;
+		font-weight:bold;
+	}
+	
+	#settings img {
+		cursor:pointer;
+		border:2px solid transparent;
+	}
+	
+	#banner {
+		float:right;
+		margin-right:4px;
+		margin-top:4px;
+	}
+	
+	#footer td {
+		border-top:1px solid black;
+		font-weight:bold;
+	}
+	
+	#menu {
+		background-color:#EAEFF7;
+		padding-left:4px;
+		height:16px;
+		text-align:center;
+	}
+	
+	#settingslink {
+		display:none;
+		visibility:hidden;			
+	}
+	
+	#notes, #detailslink {
+		padding-left:4px;
+		display:none;
+		visibility:hidden;		
+	}
+	
+	#results {
+		position:relative;
+	}
+	
+	#navleft {
+		position:absolute;
+		top:0px;
+		left:0px;
+		background-color:#eee;
+		width:8px;
+		height:56px;
+	}
+	
+	#navright {
+		position:absolute;
+		top:0px;
+		right:0px;
+		background-color:#eee;
+		width:8px;
+		height:56px;
+	}
+</style>
+	
+<script type="text/javascript">
+
+	var owner, viewer, friends;
+	var viewerIsOwner = false;
+	var ownerData, friendsData;
+	var bondsnummer, avatar, displayAvatar;
+	var currentview;
+	var tableCellDisplay = 'table-cell';
+	var rankingList, rankingPosition;
+
+	function displayStats(data)
+	{	
+		var html = new Array();
+				
+		html.push( "<div id='navleft' onclick='movePrevious();'>" );
+		if (rankingPosition>0)
+			html.push( "<img src='http://www.ttkaart.nl/opensocial/navleft.png' style='padding-top:22px;padding-left:4px;cursor:pointer;' />" );
+		html.push("</div>");
+		
+		html.push( data.data );
+		
+		html.push("<div id='navright' onclick='moveNext();'>");
+		if (rankingPosition<(rankingList.length-1))
+			html.push("<img src='http://www.ttkaart.nl/opensocial/navright.png' style='padding-top:22px;padding-right:4px;cursor:pointer;' />" );
+		html.push("</div>");
+	
+		document.getElementById("results").innerHTML = html.join('');
+				
+		gadgets.window.adjustHeight();
+		
+		document.getElementById("avatar").src = displayAvatar;
+				
+		if (rankingPosition>=0 && rankingPosition<4)
+		{
+			document.getElementById("player").style["backgroundRepeat"] = "no-repeat";
+			document.getElementById("player").style["backgroundPosition"] = "100% 0%";
+			document.getElementById("player").style["backgroundImage"] = "url(http://www.ttkaart.nl/opensocial/medal"+(rankingPosition+1)+".png)";
+		}
+	}
+
+	
+	function setErrorMessage(msg)
+	{
+		document.getElementById("results").innerHTML = "<br /><div id='error'>"+msg+"</div>";
+		gadgets.window.adjustHeight();		
+	}
+	
+	
+	function getStats()
+	{
+		if ( typeof bondsnummer != 'undefined' )
+		{			
+			document.getElementById("results").innerHTML = '<img src="http://www.ttkaart.nl/opensocial/ajax_action.gif" alt="Bezig met laden..." style="padding:8px;" />';
+		
+			var url = "http://www.ttkaart.nl/opensocial/tthistory.asp?id="+bondsnummer+"&view="+currentview+"&t="+(new Date().valueOf());
+			
+			gadgets.io.makeRequest(url, displayStats, gadgets.io.ContentType.TEXT );
+		}
+		else
+		{
+			if (viewerIsOwner)
+				setErrorMessage("Voer een bondsnummer in, anders kunnen anderen jouw prestaties niet op jouw profiel zien!");
+			else
+			{
+				var strNickName = owner.getField(opensocial.Person.Field.NICKNAME)
+				if ( owner.getField(opensocial.Person.Field.GENDER) == 'MALE')
+					setErrorMessage("Uh oh, "+strNickName+" heeft nog geen bondsnummer ingevoerd, dus zijn resultaten kunnen nog niet weergegeven worden...");	
+				else
+					setErrorMessage("Uh oh, "+strNickName+" heeft nog geen bondsnummer ingevoerd, dus haar resultaten kunnen nog niet weergegeven worden...");
+			}
+		}
+	}
+	
+		
+	function displayFriendStats(_bondsnummer,_thumbnail, ranking)
+	{
+		bondsnummer = _bondsnummer;
+		displayAvatar = _thumbnail;
+		rankingPosition = ranking;
+						
+		getStats();
+		
+		showPanel('results');
+	}
+		
+	function saveBondsnummerCallback(response)
+	{
+        if ( response.get("status").hadError() )
+			setErrorMessage("Hmmm, helaas ging er iets mis tijdens het opslaan van je bondsnummer. Probeer het nog maar eens...");
+        else
+		{			
+			if ( response.get("status2").hadError() )
+				setErrorMessage("Hmmm, helaas ging er iets mis tijdens het opslaan van je avatar. Probeer het nog maar eens...");
+			else
+			{
+				document.getElementById("cancel").style["display"] = "inline";
+				document.getElementById("cancel").style["visibility"] = "visible";
+				
+				if ( avatar == 0 )
+					displayAvatar = owner.getField(Hyves.Person.Field.THUMBNAIL_URL_SMALL);
+				else
+					displayAvatar = "http://www.ttkaart.nl/opensocial/ttlogo_small"+avatar+".png";
+			
+				getStats();
+				getRankings();
+	
+				showPanel('results');
+			}
+		}
+	}
+	
+	
+	function saveBondsnummer() 
+	{
+		bondsnummer = document.getElementById("bondsnummer").value;
+		
+		var regexp = /\d{7}/
+		
+		if ( bondsnummer != "" && bondsnummer.replace(regexp,"")=="" )
+		{
+			bondsnummer = document.getElementById("bondsnummer").value;
+				
+			var req = opensocial.newDataRequest();
+			req.add(req.newUpdatePersonAppDataRequest("VIEWER", "bondsnummer", bondsnummer), "status");
+			req.add(req.newUpdatePersonAppDataRequest("VIEWER", "avatar", avatar.toString()), "status2");
+			req.send(saveBondsnummerCallback);
+		}
+		else
+			setErrorMessage("Het bondsnummer moet 7 cijfers lang zijn!");	
+	}
+
+	function sortResults(a, b)
+	{
+	   if(a.rating > b.rating)
+		  return -1;
+	   if(a.rating < b.rating)
+		  return 1;
+	   return 0;
+	} 
+
+	function getRankingsCallback(data)
+	{	
+		var ranking = 1;
+		var ratings = eval(data.data);
+		rankingList = new Array();
+	
+		
+		friends.each(function(person) {
+			var name, thumbnail;
+			
+			var id = person.getId();
+			var firstname = person.getField(opensocial.Person.Field.NAME).getField(opensocial.Name.Field.GIVEN_NAME);
+			var lastname = person.getField(opensocial.Person.Field.NAME).getField(opensocial.Name.Field.FAMILY_NAME);
+			
+			name = (lastname==null)?firstname : firstname + " " + lastname;
+			
+			if ( typeof friendsData[id]["avatar"] == 'undefined' || friendsData[id]["avatar"] == 0 )
+				thumbnail = person.getField(Hyves.Person.Field.THUMBNAIL_URL_SMALL);         
+			else
+				thumbnail = "http://www.ttkaart.nl/opensocial/ttlogo_small"+friendsData[id]["avatar"]+".png";
+				
+			if ( lastname == null ) lastname = "";
+		
+			var rating = ratings[ "r"+friendsData[id]["bondsnummer"] ];
+						
+			if ( typeof rating == 'undefined')
+				r = -9999;
+						
+			rankingList.push( {rating:rating, name:firstname+" "+lastname, thumbnail:thumbnail, bondsnummer:friendsData[id]["bondsnummer"] } );
+			
+			ranking++;
+		});
+		
+		if ( typeof bondsnummer != 'undefined' )
+		{
+			var firstname = owner.getField(opensocial.Person.Field.NAME).getField(opensocial.Name.Field.GIVEN_NAME);
+			var lastname = owner.getField(opensocial.Person.Field.NAME).getField(opensocial.Name.Field.FAMILY_NAME);
+			var name, thumnnail;
+			
+			name = (lastname==null)?firstname : firstname + " " + lastname;
+			
+			if ( avatar == 0 )
+				thumbnail = owner.getField(Hyves.Person.Field.THUMBNAIL_URL_SMALL);         
+			else
+				thumbnail = "http://www.ttkaart.nl/opensocial/ttlogo_small"+avatar+".png";
+				
+			rankingList.push( {rating:ratings["r"+bondsnummer], name:firstname+" "+lastname, thumbnail:thumbnail, bondsnummer:bondsnummer } );
+		}
+		
+		rankingList.sort(sortResults);
+		
+		var html = new Array();
+		var style;
+		
+		for (var i = 0; i < rankingList.length; i++)
+		{
+			if (bondsnummer==rankingList[i].bondsnummer)
+				rankingPosition = i;
+		
+			style = "";
+			if ( !(i&1) ) style="background-color:#ddd;";
+			
+			if (i<3)
+				style += "background-image:url(http://www.ttkaart.nl/opensocial/medal"+(i+1)+".png);background-repeat:no-repeat;background-position:100% 0%;";
+			
+			if (style != "") style = " style='"+style+"'";
+			
+			html.push( "<div class='friend'" + style + " onclick='displayFriendStats("+rankingList[i].bondsnummer+",\""+rankingList[i].thumbnail+"\","+i+");'>");
+			
+			if (i<3)
+				html.push( "<div style='float:right;width:48px;'>&nbsp;</div>" );
+			else
+				html.push( "<div style='float:right;padding-top:20px;font-weight:bold;width:48px;text-align:center;'>#"+(i+1)+"</div>" );
+				
+			html.push( "<img src='"+rankingList[i].thumbnail+"' width='44px' height='48px'/>" );
+			html.push( "<div id='name'>"+rankingList[i].name+"</div>" );	
+			
+			html.push( "<div id='best'>Rating: " );
+			if ( rankingList[i].rating == -9999 )
+				html.push("onbekend");
+			else
+				html.push(rankingList[i].rating);
+			html.push( "</div>" );	
+			
+			html.push( "</div>");
+		}
+						
+		document.getElementById("rankings").innerHTML = html.join('');
+		
+		if (rankingPosition>=0 && rankingPosition<3)
+		{			
+			document.getElementById("player").style["backgroundRepeat"] = "no-repeat";
+			document.getElementById("player").style["backgroundPosition"] = "100% 0%";
+			document.getElementById("player").style["backgroundImage"] = "url(http://www.ttkaart.nl/opensocial/medal"+(rankingPosition+1)+".png)";
+		}
+		
+		gadgets.window.adjustHeight();		
+	}
+	
+	function getRankings()
+	{
+		document.getElementById("rankings").innerHTML = '<img src="http://www.ttkaart.nl/opensocial/ajax_action.gif" alt="Bezig met laden..." style="padding:8px;" />';
+			
+		var idlist = new Array();
+		idlist.push( bondsnummer );
+				
+		friends.each(function(person) {		
+			if( typeof friendsData[person.getId()]["bondsnummer"] != 'undefined' )
+				idlist.push( friendsData[person.getId()]["bondsnummer"] );
+		});
+		
+		var url = "http://www.ttkaart.nl/opensocial/ttratings.asp?idlist=" + idlist.join(',') + "&t="+(new Date().valueOf());
+		
+		gadgets.io.makeRequest(url, getRankingsCallback, gadgets.io.ContentType.TEXT );
+	}
+	
+	function onSettingsLoaded(response)
+	{
+		owner = response.get('owner').getData();
+		friends = response.get('friends').getData();
+		friendsData = response.get('friendsData').getData();
+				
+		if ( response.get('viewer') )
+		{
+			viewer = response.get('viewer').getData();
+			viewerIsOwner = viewer.isOwner();
+		}
+				
+		if ( response.get("ownerData").hadError() )
+		{
+			setErrorMessage("Hmmmm... Er ging iets mis tijdens het ophalen van de gegevens...");
+			return;
+		}
+
+		ownerData = response.get("ownerData").getData();
+
+		bondsnummer = ownerData[ owner.getId() ]["bondsnummer"];
+		avatar = ownerData[ owner.getId() ]["avatar"];
+	
+		if ( typeof avatar == 'undefined' )
+			avatar = 0;
+					
+		if ( avatar == 0 )
+			displayAvatar = owner.getField(Hyves.Person.Field.THUMBNAIL_URL_SMALL);
+		else
+			displayAvatar = "http://www.ttkaart.nl/opensocial/ttlogo_small"+avatar+".png";
+
+			
+		if (viewerIsOwner)
+		{
+			document.getElementById("avatar0").src = owner.getField(Hyves.Person.Field.THUMBNAIL_URL_SMALL);
+			document.getElementById("avatar"+avatar).style["border"] = "2px dotted black";
+		
+			document.getElementById("settingslink").style["display"] = "inline";
+			document.getElementById("settingslink").style["visibility"] = "visible";
+				
+			if (typeof bondsnummer == 'undefined')
+			{
+				document.getElementById("results").innerHTML = "&nbsp;";	
+							
+				document.getElementById("cancel").style["display"] = "none";
+				document.getElementById("cancel").style["visibility"] = "hidden";
+				
+				showPanel('settings');
+			}
+			else
+				document.getElementById("bondsnummer").value = bondsnummer;
+			
+		}
+		
+		getRankings();
+		getStats();	
+	}
+
+
+	var getSettings = function() {
+		var req = opensocial.newDataRequest();
+		
+		if (opensocial.hasPermission(opensocial.Permission.VIEWER))
+			req.add(req.newFetchPersonRequest(opensocial.DataRequest.PersonId.VIEWER), 'viewer');
+
+		req.add(req.newFetchPersonRequest(opensocial.DataRequest.PersonId.OWNER), 'owner');
+		req.add(req.newFetchPersonAppDataRequest("OWNER", ["bondsnummer","avatar"]), "ownerData");
+		
+		var params = {};
+        
+		params[opensocial.DataRequest.PeopleRequestFields.FIRST] = 0;
+        params[opensocial.DataRequest.PeopleRequestFields.MAX] = 300;
+        params[opensocial.DataRequest.PeopleRequestFields.SORT_ORDER] = opensocial.DataRequest.SortOrder.NAME;
+        params[opensocial.DataRequest.PeopleRequestFields.FILTER] = opensocial.DataRequest.FilterType.HAS_APP;
+        
+		req.add(req.newFetchPeopleRequest(opensocial.DataRequest.Group.OWNER_FRIENDS, params), 'friends');
+		req.add(req.newFetchPersonAppDataRequest("OWNER_FRIENDS", ["bondsnummer","avatar"]), "friendsData");
+		
+		req.send(onSettingsLoaded);
+	}
+
+	
+	function toCanvasView()
+	{         
+		var availableviews = gadgets.views.getSupportedViews();
+		gadgets.views.requestNavigateTo(availableviews['canvas']);
+	}
+
+	function showPanel(panel)
+	{
+		var panels = ["results","rankings","settings","about"];
+		
+		for (var i = 0; i < panels.length; i++)
+		{
+			if (panels[i]==panel)
+			{
+				document.getElementById(panel).style["display"]="block";
+				document.getElementById(panel).style["visibility"]="visible";
+			}
+			else
+			{
+				document.getElementById(panels[i]).style["display"]="none";
+				document.getElementById(panels[i]).style["visibility"]="hidden";
+			}
+		}
+		
+		gadgets.window.adjustHeight();		
+	}
+	
+	function movePrevious()
+	{
+		if (rankingPosition>0)
+		{
+			rankingPosition--;
+			displayFriendStats( rankingList[rankingPosition]["bondsnummer"],rankingList[rankingPosition]["thumbnail"],rankingPosition );
+		}
+	}
+	
+	function moveNext()
+	{
+		if (rankingPosition<(rankingList.length-1))
+		{
+			rankingPosition++;			
+			displayFriendStats( rankingList[rankingPosition]["bondsnummer"],rankingList[rankingPosition]["thumbnail"], rankingPosition );
+		}
+	}
+	
+	function init()
+	{
+		if (navigator.appVersion.indexOf("MSIE") != -1) tableCellDisplay = 'inline';			
+	
+		currentview = gadgets.views.getCurrentView().getName();
+			
+		if ( currentview == 'canvas' )
+		{
+			document.getElementById("notes").style["display"]=tableCellDisplay;
+			document.getElementById("notes").style["visibility"]="visible";
+		}
+		else
+		{
+			document.getElementById("detailslink").style["display"]=tableCellDisplay;
+			document.getElementById("detailslink").style["visibility"]="visible";
+		}
+		
+		getSettings();
+	}
+	
+	function setAvatar(obj,nr)
+	{
+		for (var i=0; i<=8; i++)
+			document.getElementById("avatar"+i).style["border"]="2px solid transparent";
+			
+		obj.style["border"]="2px dotted black";
+		
+		avatar = nr;
+	}
+
+	gadgets.util.registerOnLoadHandler(init);
+</script>
+
+<div id="menu">
+<a href="javascript:showPanel('results');" id="resultslink">&lt;results&gt;</a>
+<a href="javascript:showPanel('rankings');" id="rankingslink">&lt;ranking&gt;</a>
+<a href="javascript:showPanel('settings');" id="settingslink">&lt;settings&gt;</a>
+<a href="javascript:showPanel('about');" id="aboutlink">&lt;about&gt;</a>
+</div>
+
+<div id="results">&nbsp;</div>
+
+<div id="rankings">&nbsp;</div>
+
+<div id="settings">
+	<br />
+	Voer je bondsnummer in: <input type="text" id="bondsnummer" /><br />
+	<br />
+	Selecteer een avatar:<br />
+	<img id="avatar0" src="http://www.ttkaart.nl/opensocial/empty.png" style="width:44px;height:48px;" onclick="setAvatar(this,0);" />
+	<img id="avatar1" src="http://www.ttkaart.nl/opensocial/ttlogo_small1.png" onclick="setAvatar(this,1);" />
+	<img id="avatar2" src="http://www.ttkaart.nl/opensocial/ttlogo_small2.png" onclick="setAvatar(this,2);" />
+	<img id="avatar3" src="http://www.ttkaart.nl/opensocial/ttlogo_small3.png" onclick="setAvatar(this,3);" />
+	<img id="avatar4" src="http://www.ttkaart.nl/opensocial/ttlogo_small4.png" onclick="setAvatar(this,4);" />
+	<img id="avatar5" src="http://www.ttkaart.nl/opensocial/ttlogo_small5.png" onclick="setAvatar(this,5);" />
+	<img id="avatar6" src="http://www.ttkaart.nl/opensocial/ttlogo_small6.png" onclick="setAvatar(this,6);" />
+	<img id="avatar7" src="http://www.ttkaart.nl/opensocial/ttlogo_small7.png" onclick="setAvatar(this,7);" />
+	<img id="avatar8" src="http://www.ttkaart.nl/opensocial/ttlogo_small8.png" onclick="setAvatar(this,8);" />
+	<br /><br />
+	<div style='width:100%;text-align:center;'>
+		<input type="button" value="opslaan" onclick="saveBondsnummer();" />
+		<input type="button" id="cancel" value="annuleren" onclick="showPanel('results');" />
+	</div>
+</div>
+
+<div id="about">
+<br />
+Ontwikkeld door: <a href="http://bombaman.hyves.nl/" target="_parent">Arjan</a><br />
+Logo ontworpen door: <a href="http://tamas.tv/" target="_blank">Tamas</a><br />
+Grafisch ontwerp: <a href="http://little-angel666.hyves.nl/" target="_parent">Antwa-chan</a>
+</div>
+<div id="footer">
+	<table class='footer' cellspacing='0'>
+		<tr>
+			<td id='detailslink'><a href='javascript:toCanvasView();'>&gt;&gt; details</a></td>
+			<td id='notes'>* rating op basis van competitieresultaat<br />** licentie op basis van rating</td>
+			<td style='text-align:right;padding-right:4px;'>powered by <a href='http://ttkaart.nl/' target='_blank'>ttkaart.nl</a></td>
+		</tr>
+	</table>
+</div>
+</div>
+  ]]>
+  </Content>
+</Module>

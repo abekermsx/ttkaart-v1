@@ -1,2 +1,4 @@
 # ttkaart-v1
- Version 1 of ttkaart.nl
+
+Versie 1 van de website ttkaart.nl
+
